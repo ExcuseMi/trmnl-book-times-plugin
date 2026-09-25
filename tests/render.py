@@ -33,6 +33,7 @@ MIN_PX = 10  # smallest context size (CSS px) accepted anywhere
 # (name, minute file, settings)
 CASES = {
     'typical': ('1722', {}),
+    'reference': ('2208', {}),  # the user's reference poster (tiny-paper, TRMNL X)
     'shortest': ('1621', {}),
     'longest': ('2029', {}),
     'long-gutenberg': ('1117', {}),
@@ -51,7 +52,7 @@ DEVICES = {
 
 # previews kept in docs/screens (--screens): case-device-view
 SCREEN_SET = [
-    'typical-og1-full', 'typical-og2-full', 'typical-x4-full', 'typical-x4p-full',
+    'reference-x4-full', 'reference-og2-full', 'typical-og1-full', 'typical-og2-full', 'typical-x4-full', 'typical-x4p-full',
     'typical-og2-half_horizontal', 'typical-og2-half_vertical', 'typical-og2-quadrant',
     'longest-og1-full', 'longest-og2-quadrant', 'longest-x4p-half_vertical', 'shortest-og1-full',
     'long-gutenberg-og1-half_vertical', 'long-title-og2-quadrant', 'noon-og2-half_horizontal', 'bare-og1-full',
