@@ -194,7 +194,7 @@ def pick24(cands, half):
 
 
 def parts(us):
-    """Runs of [text, emph] with the spacing inside the text: time words on their own, punctuation as context."""
+    """Runs of [text, emph] with the spacing inside the text: time words with their opening marks, the rest as context."""
     runs = []
 
     def add(t, e):
@@ -214,7 +214,8 @@ def parts(us):
     for i, u in enumerate(us):
         if i:
             add(' ', 0)
-        add(marks(u['pre'], True), 0)
+        # an opening mark takes its word's size (a quote opening on a time word is as large as the word)
+        add(marks(u['pre'], True), 1 if u['emph'] else 0)
         add(u['word'], 1 if u['emph'] else 0)
         add(marks(u['post'], False), 0)
     # a space between two time words stays in the time run ("one o'clock" is one run)
