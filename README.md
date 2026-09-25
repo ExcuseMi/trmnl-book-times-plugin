@@ -1,6 +1,6 @@
 # TRMNL Book Times
 
-A literature clock for [TRMNL](https://trmnl.com): every refresh shows a passage from a book that names the current minute, set as a typographic poster. The time words are large and bold, the story around them smaller, the book and its author at the bottom, the time in digits in the corner. 1440 minutes, each with its own passage.
+A literature clock for [TRMNL](https://trmnl.com): every refresh shows a passage from a book that names the current minute, set as a typographic poster in the style of [tiny-paper](https://github.com/ExcuseMi/tiny-paper)'s Literature Clock: Montserrat in capitals, the time words in Black and the largest, every line of the story around them stretched to the full width, the book, its author and the time in TRMNL's title bar. 1440 minutes, each with its own passage.
 
 ![Book Times on the TRMNL OG](docs/screens/typical-og1-full.png)
 
@@ -19,9 +19,9 @@ A literature clock for [TRMNL](https://trmnl.com): every refresh shows a passage
 
 | Setting | Default | |
 |---|---|---|
-| Show the Time | on | the minute the passage names, bottom right |
+| Show the Time | on | the minute the passage names, in the title bar |
 | Hour Format | 24-hour | 13:05 or 1:05 PM |
-| Show Title and Author | on | the book and its author, bottom left; keep it on (the passages are quoted with credit) |
+| Show Title and Author | on | the book (title bar title) and its author (title bar, right); keep it on (the passages are quoted with credit) |
 
 ## How it works
 
@@ -30,8 +30,8 @@ A literature clock for [TRMNL](https://trmnl.com): every refresh shows a passage
 | Data | `docs/m/HHMM.json`, one small file (about 400 bytes) per minute of the day, on GitHub Pages: `https://excusemi.github.io/trmnl-book-times-plugin/m/1305.json` | all 1440 passages (about 560 KB) are over TRMNL's 100 KB limit for a template file or a polled payload; an hourly file would repeat the same payload for an hour and TRMNL skips re-rendering unchanged data |
 | Minute | the polling URL names it with Liquid: `{{ "now" \| date: "%s" \| plus: trmnl.user.utc_offset \| date: "%H%M" }}` | TRMNL polls right before it renders, so the passage is for the minute the screen is drawn, in the user's time zone |
 | Refresh | every 5 minutes (TRMNL's shortest) | a screen stays up 5 to 15 minutes, so the corner shows which minute the passage is for |
-| Fit | a small script in `shared.liquid` searches the largest context size that fits the view (time words 1.9 times as large), after the fonts load; hyphenated time words never break | the framework's fit-value scales one element; a poster mixes two sizes in one flowing text |
-| Tones | context black on 1-bit, solid gray (`gray-30`) on 2 and 4-bit; time words black | solid levels, no dithered text |
+| Layout | a port of tiny-paper's `plugins/litclock/converter/src/layout.ts` (MIT) in `shared.liquid`, run after Montserrat (Google Fonts, OFL-1.1) loads and measured with a canvas: every context line sized to the full width, time words as blocks with context stacked beside them, rows chosen by a DP, the context size and time/context ratio scanned to fill the height; a short passage leaves room above and below, as in tiny-paper | the same poster as tiny-paper for the same minute and size; the framework's fit-value scales one element, a poster sizes every line on its own |
+| Tones | time words black; context in two grays alternating by sentence (2-bit `gray-30` / `gray-55`, 4-bit `gray-35` / `gray-55`), black in Light on 1-bit | solid levels, no dithered text |
 | No data | if the fetch fails, the time in digits fills the screen | |
 
 ### Selection
