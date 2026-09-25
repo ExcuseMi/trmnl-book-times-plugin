@@ -1,0 +1,120 @@
+{% comment %}
+Book Times: a literature clock. The polling URL fetches docs/m/HHMM.json for the user's local minute (GitHub Pages
+of this repository); this template sets it as a poster: the time words large and bold, the context around them,
+title / author and the time at the bottom.
+
+Merge variables from the polled file: time (HH:MM, 24-hour), parts ([text, 1 for time words / 0 for context], the
+spacing inside the text), title, author (plus mode, source, rights, license: the row's tags, unused here).
+
+Code MIT. The passages: Project Gutenberg (public domain) and, for the minutes Gutenberg lacks, the quote collections
+JohsEnevoldsen/literature-clock (CC BY-NC-SA 2.5), cdmoro/literature-clock and utrost/LiteratureClock (AGPL-3.0),
+non-commercial, under their terms. See README.md.
+{% endcomment %}
+{% template main %}
+{%- assign cf = trmnl.plugin_settings.custom_fields_values -%}
+{%- assign show_time = true -%}
+{%- if cf.show_time == false or cf.show_time == 'false' -%}{%- assign show_time = false -%}{%- endif -%}
+{%- assign show_attr = true -%}
+{%- if cf.show_attribution == false or cf.show_attribution == 'false' -%}{%- assign show_attr = false -%}{%- endif -%}
+{%- if time != blank -%}
+  {%- assign t = time -%}
+{%- else -%}
+  {%- assign t = "now" | date: "%s" | plus: trmnl.user.utc_offset | date: "%H:%M" -%}
+{%- endif -%}
+{%- assign hh = t | slice: 0, 2 | plus: 0 -%}
+{%- assign mm = t | slice: 3, 2 -%}
+{%- if cf.hour_format == '12' -%}
+  {%- assign h12 = hh | modulo: 12 -%}
+  {%- if h12 == 0 -%}{%- assign h12 = 12 -%}{%- endif -%}
+  {%- if hh < 12 -%}{%- assign ampm = 'AM' -%}{%- else -%}{%- assign ampm = 'PM' -%}{%- endif -%}
+  {%- capture digits -%}{{ h12 }}:{{ mm }} {{ ampm }}{%- endcapture -%}
+{%- else -%}
+  {%- assign digits = t -%}
+{%- endif -%}
+{%- assign has_text = false -%}
+{%- if parts != blank and parts.size > 0 -%}{%- assign has_text = true -%}{%- endif -%}
+<div class="layout layout--col layout--stretch-x gap--small">
+  <div class="bt-box w--full grow flex flex--col flex--center-y">
+    {%- if has_text -%}
+    <div class="bt-text text--xxlarge font--regular text--left 2bit:text--gray-30 4bit:text--gray-30">
+      {%- for p in parts -%}
+        {%- if p[1] == 1 -%}
+          {%- assign ws = p[0] | escape | replace: ' ', '</span> <span class="bt-w">' -%}
+          <span class="bt-time font--bold text--black"><span class="bt-w">{{ ws }}</span></span>
+        {%- else -%}{{ p[0] | escape }}{%- endif -%}
+      {%- endfor -%}
+    </div>
+    {%- else -%}
+    <div class="bt-text text--xxlarge font--regular text--center"><span class="bt-time font--bold text--black">{{ digits }}</span></div>
+    {%- endif -%}
+  </div>
+  {%- comment -%} without a passage the digits are the poster {%- endcomment -%}
+  {%- assign foot = false -%}
+  {%- if has_text -%}{%- if show_attr or show_time -%}{%- assign foot = true -%}{%- endif -%}{%- endif -%}
+  {%- if foot %}
+  <div class="bt-foot flex flex--row flex--between flex--bottom w--full gap--medium shrink-0">
+    <span class="bt-attr description flex flex--row flex--left gap--none">
+      {%- if show_attr -%}<span class="bt-title font--bold">{{ title | escape }}</span><span class="shrink-0">&nbsp;/ {{ author | escape }}</span>{%- endif -%}
+    </span>
+    {%- if show_time -%}<span class="bt-digits title title--small value--tnums shrink-0">{{ digits }}</span>{%- endif -%}
+  </div>
+  {%- endif %}
+</div>
+<script>
+// Fits the passage into its box: the context size is searched, the time words are TIME_RATIO times as large.
+(function () {
+  var TIME_RATIO = 1.9;
+  var script = document.currentScript;
+  var view = (script && script.closest('.view')) || document;
+  function fit() {
+    var box = view.querySelector('.bt-box');
+    var txt = view.querySelector('.bt-text');
+    if (!box || !txt) return;
+    box.style.overflow = 'hidden';
+    box.style.minHeight = '0';
+    txt.style.width = '100%';
+    var times = txt.querySelectorAll('.bt-time');
+    // a time word never breaks at its hyphen (twenty-two); the phrase still wraps between words
+    var words = txt.querySelectorAll('.bt-w');
+    for (var j = 0; j < words.length; j++) words[j].style.whiteSpace = 'nowrap';
+    function set(s) {
+      txt.style.fontSize = s + 'px';
+      txt.style.lineHeight = '1.3';
+      for (var i = 0; i < times.length; i++) {
+        times[i].style.fontSize = (s * TIME_RATIO) + 'px';
+        times[i].style.lineHeight = '1.05';
+      }
+    }
+    function fits() {
+      return txt.scrollHeight <= box.clientHeight && txt.scrollWidth <= box.clientWidth;
+    }
+    var lo = 4, hi = Math.max(8, box.clientHeight / 2.5);
+    for (var k = 0; k < 16; k++) {
+      var mid = (lo + hi) / 2;
+      set(mid);
+      if (fits()) lo = mid; else hi = mid;
+    }
+    set(Math.floor(lo * 4) / 4);
+  }
+  // the bottom line: the title gives way (ellipsis), the author and the time never do
+  function foot() {
+    var attr = view.querySelector('.bt-attr'), title = view.querySelector('.bt-title');
+    if (!attr || !title) return;
+    attr.style.minWidth = '0';
+    attr.style.flex = '1 1 auto';
+    attr.style.whiteSpace = 'nowrap';
+    title.style.minWidth = '0';
+    title.style.overflow = 'hidden';
+    title.style.textOverflow = 'ellipsis';
+    title.style.whiteSpace = 'nowrap';
+  }
+  function run() {
+    foot();
+    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit).catch(fit);
+    else fit();
+  }
+  if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
+  else run();
+})();
+</script>
+{% endtemplate %}

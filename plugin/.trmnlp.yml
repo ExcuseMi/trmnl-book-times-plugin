@@ -1,0 +1,18 @@
+---
+# Local preview. `trmnlp build` / `serve` poll the real polling URL (GitHub Pages); trmnlp renders it with
+# the custom fields only, so trmnl.user.utc_offset is empty there and the file is the UTC minute's.
+watch:
+  - .trmnlp.yml
+  - src
+
+time_zone: Europe/Brussels
+
+custom_fields:
+  show_time: true
+  hour_format: '24'
+  show_attribution: true
+
+variables:
+  trmnl:
+    plugin_settings:
+      instance_name: Book Times

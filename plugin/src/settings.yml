@@ -1,0 +1,52 @@
+---
+strategy: polling
+no_screen_padding: 'no'
+dark_mode: 'no'
+static_data: ''
+polling_verb: get
+polling_url: 'https://excusemi.github.io/trmnl-book-times-plugin/m/{{ "now" | date: "%s" | plus: trmnl.user.utc_offset | date: "%H%M" }}.json'
+polling_headers: ''
+polling_body: ''
+name: Book Times
+refresh_interval: 5
+custom_fields:
+- keyname: author_info
+  name: About Book Times
+  field_type: author_bio
+  description: "<strong>A literature clock.</strong> Every time your screen refreshes it shows a passage from a
+    book that names that very minute, set as a poster: the time words large and bold, the story around them, the
+    book and its author at the bottom.<br /><br />1440 minutes, each its own passage. Most come from public-domain
+    books on <a href='https://www.gutenberg.org' target='_blank'>Project Gutenberg</a>; the few minutes they miss
+    come from the quote collections of <a href='https://github.com/JohsEnevoldsen/literature-clock' target='_blank'>JohsEnevoldsen/literature-clock</a>
+    (CC BY-NC-SA 2.5), <a href='https://github.com/cdmoro/literature-clock' target='_blank'>cdmoro/literature-clock</a>
+    and <a href='https://github.com/utrost/LiteratureClock' target='_blank'>utrost/LiteratureClock</a> (AGPL-3.0),
+    used under their terms for non-commercial use.<br /><br />TRMNL redraws a screen every 5 minutes at most, so
+    the time in the corner says which minute the passage is for."
+  github_url: https://github.com/ExcuseMi/trmnl-book-times-plugin
+  learn_more_url: https://github.com/ExcuseMi/trmnl-book-times-plugin#readme
+  category: life
+  help_text: TRMNL X Ready
+- keyname: show_time
+  field_type: boolean
+  name: Show the Time
+  description: The time the passage names, in digits in the bottom right corner.
+  default: true
+  optional: true
+- keyname: hour_format
+  field_type: select
+  name: Hour Format
+  description: How the time in the corner reads.
+  options:
+  - 24-hour (13:05): '24'
+  - 12-hour (1:05 PM): '12'
+  default: '24'
+  optional: true
+- keyname: show_attribution
+  field_type: boolean
+  name: Show Title and Author
+  description: "The book and its author under the passage. Keep it on: the passages are quoted with credit
+    (Project Gutenberg, <a href='https://github.com/JohsEnevoldsen/literature-clock' target='_blank'>JohsEnevoldsen</a>,
+    <a href='https://github.com/cdmoro/literature-clock' target='_blank'>cdmoro</a>,
+    <a href='https://github.com/utrost/LiteratureClock' target='_blank'>utrost</a>)."
+  default: true
+  optional: true
