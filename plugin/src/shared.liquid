@@ -1,14 +1,20 @@
 {% comment %}
 Book Times: a literature clock. The polling URL fetches docs/m/HHMM.json for the user's local minute (GitHub Pages
-of this repository); this template sets it as a poster: the time words large and bold, the context around them,
-title / author and the time at the bottom.
+of this repository); this template sets it as tiny-paper's Literature Clock poster: Montserrat in capitals, the time
+words Black and the largest, every context line Bold and exactly as wide as the poster, a time block with a stack of
+context lines beside it, the context in two grays alternating by sentence (black on 1-bit, Light on the Bold
+advances). The book and its author (and the time) go in the framework's title bar.
+
+The layout is a port of tiny-paper's plugins/litclock/converter/src/layout.ts (MIT): rows chosen by a DP over the
+units, the context size and the time/context ratio scanned to fill the height. It runs after the fonts load and
+measures Montserrat with a canvas.
 
 Merge variables from the polled file: time (HH:MM, 24-hour), parts ([text, 1 for time words / 0 for context], the
 spacing inside the text), title, author (plus mode, source, rights, license: the row's tags, unused here).
 
 Code MIT. The passages: Project Gutenberg (public domain) and, for the minutes Gutenberg lacks, the quote collections
 JohsEnevoldsen/literature-clock (CC BY-NC-SA 2.5), cdmoro/literature-clock and utrost/LiteratureClock (AGPL-3.0),
-non-commercial, under their terms. See README.md.
+non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from Google Fonts. See README.md.
 {% endcomment %}
 {% template main %}
 {%- assign cf = trmnl.plugin_settings.custom_fields_values -%}
@@ -33,85 +39,403 @@ non-commercial, under their terms. See README.md.
 {%- endif -%}
 {%- assign has_text = false -%}
 {%- if parts != blank and parts.size > 0 -%}{%- assign has_text = true -%}{%- endif -%}
-<div class="layout layout--col layout--stretch-x gap--small">
-  <div class="bt-box w--full grow flex flex--col flex--center-y">
-    {%- if has_text -%}
-    <div class="bt-text text--xxlarge font--regular text--left 2bit:text--gray-30 4bit:text--gray-30">
-      {%- for p in parts -%}
-        {%- if p[1] == 1 -%}
-          {%- assign ws = p[0] | escape | replace: ' ', '</span> <span class="bt-w">' -%}
-          <span class="bt-time font--bold text--black"><span class="bt-w">{{ ws }}</span></span>
-        {%- else -%}{{ p[0] | escape }}{%- endif -%}
-      {%- endfor -%}
-    </div>
-    {%- else -%}
-    <div class="bt-text text--xxlarge font--regular text--center"><span class="bt-time font--bold text--black">{{ digits }}</span></div>
-    {%- endif -%}
+{%- capture icon -%}<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 24 24" fill="none" stroke="black" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 5.5C5.5 4 9 4 12 6c3-2 6.5-2 9-.5V19c-2.5-1.5-6-1.5-9 .5-3-2-6.5-2-9-.5z"/><path d="M12 6v13.5"/></svg>{%- endcapture -%}
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@300;700;900&display=block" rel="stylesheet">
+<div class="layout">
+  <div class="bt-box w--full h--full">
+    <svg class="bt-svg" xmlns="http://www.w3.org/2000/svg" width="0" height="0"></svg>
   </div>
-  {%- comment -%} without a passage the digits are the poster {%- endcomment -%}
-  {%- assign foot = false -%}
-  {%- if has_text -%}{%- if show_attr or show_time -%}{%- assign foot = true -%}{%- endif -%}{%- endif -%}
-  {%- if foot %}
-  <div class="bt-foot flex flex--row flex--between flex--bottom w--full gap--medium shrink-0">
-    <span class="bt-attr description flex flex--row flex--left gap--none">
-      {%- if show_attr -%}<span class="bt-title font--bold">{{ title | escape }}</span><span class="shrink-0">&nbsp;/ {{ author | escape }}</span>{%- endif -%}
-    </span>
-    {%- if show_time -%}<span class="bt-digits title title--small value--tnums shrink-0">{{ digits }}</span>{%- endif -%}
-  </div>
-  {%- endif %}
 </div>
+{%- if has_text and show_attr %}
+<div class="title_bar">
+  <img class="image" src="data:image/svg+xml;base64,{{ icon | base64_encode }}" alt="">
+  <span class="title">{{ title | escape }}</span>
+  <span class="instance">{{ author | escape }}{% if show_time %} · {{ digits }}{% endif %}</span>
+</div>
+{%- elsif show_time %}
+<div class="title_bar">
+  <img class="image" src="data:image/svg+xml;base64,{{ icon | base64_encode }}" alt="">
+  <span class="title">{{ trmnl.plugin_settings.instance_name | default: 'Book Times' | escape }}</span>
+  <span class="instance">{{ digits }}</span>
+</div>
+{%- endif %}
 <script>
-// Fits the passage into its box: the context size is searched, the time words are TIME_RATIO times as large.
 (function () {
-  var TIME_RATIO = 1.9;
+  // The passage as [text, time word] runs; without one, the time in digits is the poster.
+  var PARTS = {% if has_text %}{{ parts | json }}{% else %}[[{{ digits | json }}, 1]]{% endif %};
   var script = document.currentScript;
-  var view = (script && script.closest('.view')) || document;
-  function fit() {
-    var box = view.querySelector('.bt-box');
-    var txt = view.querySelector('.bt-text');
-    if (!box || !txt) return;
-    box.style.overflow = 'hidden';
-    box.style.minHeight = '0';
-    txt.style.width = '100%';
-    var times = txt.querySelectorAll('.bt-time');
-    // a time word never breaks at its hyphen (twenty-two); the phrase still wraps between words
-    var words = txt.querySelectorAll('.bt-w');
-    for (var j = 0; j < words.length; j++) words[j].style.whiteSpace = 'nowrap';
-    function set(s) {
-      txt.style.fontSize = s + 'px';
-      txt.style.lineHeight = '1.3';
-      for (var i = 0; i < times.length; i++) {
-        times[i].style.fontSize = (s * TIME_RATIO) + 'px';
-        times[i].style.lineHeight = '1.05';
+  var view = (script && script.closest('.view')) || document.body;
+  var screenEl = view.closest ? view.closest('.screen') : null;
+  var BIT1 = !!(screenEl && screenEl.classList.contains('screen--1bit'));
+  var FAMILY = 'Montserrat';
+  var BLACK = 900, BOLD = 700, LIGHT = 300;
+  var CAP = 700; // replaced by the measured cap height (font units)
+  // context tones by sentence: no dithering on any depth (1-bit black, 2-bit #555 / #AAA, 4-bit gray-35 / gray-55)
+  var TONE_CLASS = ['text--black 2bit:text--gray-30 4bit:text--gray-35', 'text--black 2bit:text--gray-55 4bit:text--gray-55'];
+
+  // ---------------------------------------------------------------- units (text.ts: word and attached marks)
+  var ABBREV = { MR: 1, MRS: 1, DR: 1, ST: 1, MESSRS: 1, MME: 1, MLLE: 1, MM: 1, JR: 1, SR: 1, REV: 1, COL: 1, CAPT: 1, GEN: 1, LT: 1, SGT: 1, PROF: 1, HON: 1, VOL: 1 };
+  function unitsOf(parts) {
+    var chars = '', emph = [];
+    for (var i = 0; i < parts.length; i++) {
+      var s = String(parts[i][0]);
+      chars += s;
+      for (var k = 0; k < s.length; k++) emph.push(parts[i][1] == 1);
+    }
+    var out = [], re = /\S+/g, m;
+    while ((m = re.exec(chars))) {
+      var t = m[0], e = false;
+      for (var q = m.index; q < m.index + t.length; q++) if (emph[q] && /[A-Za-z0-9]/.test(chars[q])) e = true;
+      if (!/[A-Za-z0-9&\/]/.test(t) && out.length) { out[out.length - 1].t += ' ' + t; continue; } // a spaced dash
+      out.push({ t: t.toUpperCase(), emph: e });
+    }
+    if (!out.length) out.push({ t: '?', emph: true });
+    for (var u = 0; u < out.length; u++) {
+      var tail = out[u].t.replace(/^.*[A-Z0-9]/, '');
+      var word = out[u].t.replace(/[^A-Z0-9.]+$/, '');
+      var abbr = ABBREV[word.replace(/\.$/, '')] && tail === '.';
+      out[u].end = /[.!?]/.test(tail) && !abbr && !/^[AP]\.M\.$/.test(out[u].t);
+    }
+    return out;
+  }
+
+  // ---------------------------------------------------------------- metrics (canvas, font units = px at 1000)
+  var canvas = document.createElement('canvas'), g2 = canvas.getContext('2d');
+  function measure(s, w) {
+    g2.font = w + ' 1000px ' + FAMILY;
+    return g2.measureText(s);
+  }
+  function Run(units) {
+    this.units = units;
+    this.pre = {}; this.lsbs = {}; this.rsbs = {}; this.desc = {}; this.over = {};
+    this.space = {};
+    var ws = [BLACK, BOLD];
+    for (var a = 0; a < ws.length; a++) {
+      var w = ws[a], p = [0], l = [], r = [], d = [], o = [];
+      for (var i = 0; i < units.length; i++) {
+        var mt = measure(units[i].t, w);
+        p.push(p[p.length - 1] + mt.width);
+        l.push(-mt.actualBoundingBoxLeft);
+        r.push(mt.width - mt.actualBoundingBoxRight);
+        d.push(Math.max(0, mt.actualBoundingBoxDescent));
+        o.push(Math.max(0, mt.actualBoundingBoxAscent - CAP));
+      }
+      this.pre[w] = p; this.lsbs[w] = l; this.rsbs[w] = r; this.desc[w] = d; this.over[w] = o;
+      this.space[w] = measure(' ', w).width;
+    }
+  }
+  Run.prototype.nat = function (i, j, w) { return this.pre[w][j] - this.pre[w][i] + (j - i - 1) * this.space[w]; };
+  Run.prototype.lsb = function (i, w) { return this.lsbs[w][i]; };
+  Run.prototype.rsb = function (j, w) { return this.rsbs[w][j - 1]; };
+  Run.prototype.ink = function (i, j, w) { return this.nat(i, j, w) - this.lsb(i, w) - this.rsb(j, w); };
+  Run.prototype.descent = function (i, j, w) { var d = 0; for (var k = i; k < j; k++) d = Math.max(d, this.desc[w][k]); return d; };
+  Run.prototype.overshoot = function (i, j, w) { var d = 0; for (var k = i; k < j; k++) d = Math.max(d, this.over[w][k]); return d; };
+
+  // ---------------------------------------------------------------- rows (layout.ts)
+  var TUNE = { gap: 0.24, stackGap: 0.22, colGap: 0.035, ratios: [2.1, 2.5, 2.9, 3.4], contrast: 1.5, ctxLow: 0.72, ctxHigh: 1.3,
+    fill: 12, leftStack: 0.25, free: 0.3, stackMax: 14, kMax: 4, timeMax: 0.5 };
+  function sq(x) { return x * x; }
+  function capOf(s) { return (s * CAP) / 1000; }
+
+  function balanced(c, a, b, k) {
+    var key = a + ',' + b + ',' + k;
+    if (c.memo.hasOwnProperty(key)) return c.memo[key];
+    if (b - a < k) { c.memo[key] = null; return null; }
+    var run = c.run, n = b - a, avg = run.nat(a, b, BOLD) / k, q, e, s;
+    var best = [], cut = [];
+    for (q = 0; q <= k; q++) { best.push([]); cut.push([]); for (e = 0; e <= n; e++) { best[q].push(Infinity); cut[q].push(0); } }
+    best[0][0] = 0;
+    for (q = 1; q <= k; q++)
+      for (e = q; e <= n; e++)
+        for (s = q - 1; s < e; s++) {
+          var prev = best[q - 1][s];
+          if (prev === Infinity) continue;
+          var v = prev + sq(run.nat(a + s, a + e, BOLD) - avg);
+          if (v < best[q][e]) { best[q][e] = v; cut[q][e] = s; }
+        }
+    var edges = [b];
+    e = n;
+    for (q = k; q > 1; q--) { e = cut[q][e]; edges.unshift(a + e); }
+    edges.unshift(a);
+    c.memo[key] = edges;
+    return edges;
+  }
+  function ctxCost(c, s) {
+    var r = s / c.sc, k = sq(Math.log(r));
+    if (r > TUNE.ctxHigh) k += 4 + 30 * (r - TUNE.ctxHigh);
+    if (r < TUNE.ctxLow) k += 4 + 30 * (TUNE.ctxLow - r);
+    return k;
+  }
+  function timeCost(c, s, ctxMax) {
+    var k = 2 * sq(Math.log(s / c.st));
+    var need = TUNE.contrast * Math.max(ctxMax, c.sc);
+    if (s < need) k += 6 + 40 * (need / s - 1);
+    var h = capOf(s);
+    if (h > TUNE.timeMax * c.ph) k += 6 + 40 * (h / (TUNE.timeMax * c.ph) - 1);
+    return k;
+  }
+  function lineRow(c, i, j, time) {
+    var s = (c.W * 1000) / c.run.ink(i, j, time ? BLACK : BOLD);
+    return { start: i, end: j, h: capOf(s), cost: time ? timeCost(c, s, 0) : ctxCost(c, s), parts: [{ i: i, j: j, time: time, size: s, x: c.x0, top: 0 }] };
+  }
+  function stackParts(c, edges, sw, x, top) {
+    var parts = [], sizes = [], y = top;
+    for (var q = 0; q + 1 < edges.length; q++) {
+      var s = (sw * 1000) / c.run.ink(edges[q], edges[q + 1], BOLD);
+      if (q > 0) y += TUNE.stackGap * capOf(Math.min(s, sizes[q - 1]));
+      parts.push({ i: edges[q], j: edges[q + 1], time: false, size: s, x: x, top: y });
+      sizes.push(s);
+      y += capOf(s);
+    }
+    return { parts: parts, h: y - top, sizes: sizes };
+  }
+  function eqSplit(c, bi, bj, edges, blockFirst) {
+    var G = TUNE.colGap * c.W, cap = CAP / 1000, K = 0;
+    for (var q = 0; q + 1 < edges.length; q++) {
+      var ink = c.run.ink(edges[q], edges[q + 1], BOLD);
+      K += (cap * 1000) / ink;
+      if (q > 0) K += (TUNE.stackGap * cap * 1000) / Math.max(ink, c.run.ink(edges[q - 1], edges[q], BOLD));
+    }
+    var a = c.run.ink(bi, bj, BLACK) / 1000;
+    var s1 = ((c.W - G) * K) / (cap + a * K);
+    var sw = c.W - G - s1 * a;
+    if (s1 <= 0 || sw < 0.2 * c.W) return null;
+    var bx = blockFirst ? c.x0 : c.x0 + c.W - s1 * a;
+    var st = stackParts(c, edges, sw, blockFirst ? c.x0 + s1 * a + G : c.x0, 0);
+    var mx = Math.max.apply(null, st.sizes), mn = Math.min.apply(null, st.sizes);
+    if (s1 < TUNE.contrast * mx) return null;
+    var cost = timeCost(c, s1, mx);
+    for (var z = 0; z < st.sizes.length; z++) cost += ctxCost(c, st.sizes[z]);
+    if (mx > 1.45 * mn) cost += 2 + 10 * (mx / mn - 1.45);
+    if (!blockFirst) cost += TUNE.leftStack;
+    var block = { i: bi, j: bj, time: true, size: s1, x: bx, top: 0 };
+    var start = blockFirst ? bi : edges[0], end = blockFirst ? edges[edges.length - 1] : bj;
+    return { start: start, end: end, h: capOf(s1), cost: cost, parts: blockFirst ? [block].concat(st.parts) : st.parts.concat([block]) };
+  }
+  function freeRow(c, le, bi, bj, re) {
+    var G = TUNE.colGap * c.W, a = c.run.ink(bi, bj, BLACK) / 1000;
+    function widest(e) {
+      if (!e) return 0;
+      var m = 0;
+      for (var q = 0; q + 1 < e.length; q++) m = Math.max(m, c.run.ink(e[q], e[q + 1], BOLD));
+      return m / 1000;
+    }
+    var mL = widest(le), mR = widest(re), gaps = (le ? 1 : 0) + (re ? 1 : 0);
+    var s = (c.W - gaps * G - c.st * a) / (mL + mR);
+    s = Math.min(TUNE.ctxHigh * c.sc, Math.max(TUNE.ctxLow * c.sc, s));
+    var s1 = (c.W - gaps * G - s * (mL + mR)) / a;
+    if (s1 <= 0) return null;
+    var cost = TUNE.free;
+    var sMax = Math.min((TUNE.timeMax * c.ph * 1000) / CAP, 1.6 * c.st);
+    var short = false;
+    if (s1 > sMax) { cost += 3 + 4 * (1 - sMax / s1); s1 = sMax; short = true; }
+    var h = capOf(s1), parts = [], mx = 0, x = c.x0;
+    function stack(e, m) {
+      var st = stackParts(c, e, s * m, x, 0);
+      if (st.h > h) return false;
+      for (var q = 0; q < st.parts.length; q++) { st.parts[q].top += h - st.h; parts.push(st.parts[q]); }
+      for (q = 0; q < st.sizes.length; q++) { cost += ctxCost(c, st.sizes[q]); mx = Math.max(mx, st.sizes[q]); }
+      cost += 0.4 * (1 - st.h / h);
+      x += s * m + G;
+      return true;
+    }
+    if (le && !stack(le, mL)) return null;
+    parts.push({ i: bi, j: bj, time: true, size: s1, x: x, top: 0 });
+    x += s1 * a + G;
+    if (re && !stack(re, mR)) return null;
+    if (s1 < TUNE.contrast * mx) return null;
+    cost += timeCost(c, s1, mx);
+    return { start: le ? le[0] : bi, end: re ? re[re.length - 1] : bj, h: h, cost: cost, parts: parts, short: short };
+  }
+  function rows(c) {
+    var n = c.emph.length, E = c.emph, best = [], from = [], i, j;
+    for (i = 0; i <= n; i++) { best.push(Infinity); from.push(null); }
+    best[0] = 0;
+    function relax(r) {
+      if (!r || r.cost === Infinity) return;
+      var v = best[r.start] + r.cost;
+      if (v < best[r.end]) { best[r.end] = v; from[r.end] = r; }
+    }
+    var ctxEnd = [];
+    for (i = 0; i <= n; i++) ctxEnd.push(0);
+    for (i = n - 1; i >= 0; i--) ctxEnd[i] = E[i] ? i : i + 1 < n && !E[i + 1] ? ctxEnd[i + 1] : i + 1;
+    function stacks(a, b) {
+      var out = [];
+      for (var k = 1; k <= TUNE.kMax && k <= b - a; k++) out.push(balanced(c, a, b, k));
+      return out;
+    }
+    for (i = 0; i < n; i++) {
+      if (best[i] === Infinity) continue;
+      if (!E[i]) {
+        var ce = ctxEnd[i];
+        for (j = i + 1; j <= Math.min(ce, i + 24); j++) relax(lineRow(c, i, j, false));
+        if (ce < n && ce - i <= TUNE.stackMax) {
+          for (var bj = ce + 1; bj <= n && E[bj - 1]; bj++) {
+            var ls = stacks(i, ce);
+            for (var x = 0; x < ls.length; x++) {
+              var le = ls[x];
+              if (!le) continue;
+              if (le.length > 2) relax(eqSplit(c, ce, bj, le, false));
+              relax(freeRow(c, le, ce, bj, null));
+              if (bj < n && !E[bj]) {
+                var re0 = ctxEnd[bj];
+                for (var rj = bj + 1; rj <= Math.min(re0, bj + TUNE.stackMax); rj++) {
+                  var rs = stacks(bj, rj);
+                  for (var y = 0; y < rs.length; y++) if (rs[y]) relax(freeRow(c, le, ce, bj, rs[y]));
+                }
+              }
+            }
+          }
+        }
+      } else {
+        for (j = i + 1; j <= n && E[j - 1]; j++) {
+          relax(lineRow(c, i, j, true));
+          if (j < n && !E[j]) {
+            var r0 = ctxEnd[j];
+            for (var rj2 = j + 1; rj2 <= Math.min(r0, j + TUNE.stackMax); rj2++) {
+              var rs2 = stacks(j, rj2);
+              for (var y2 = 0; y2 < rs2.length; y2++) {
+                var re = rs2[y2];
+                if (!re) continue;
+                if (re.length > 2) relax(eqSplit(c, i, j, re, true));
+                relax(freeRow(c, null, i, j, re));
+              }
+            }
+          }
+        }
       }
     }
-    function fits() {
-      return txt.scrollHeight <= box.clientHeight && txt.scrollWidth <= box.clientWidth;
-    }
-    var lo = 4, hi = Math.max(8, box.clientHeight / 2.5);
-    for (var k = 0; k < 16; k++) {
-      var mid = (lo + hi) / 2;
-      set(mid);
-      if (fits()) lo = mid; else hi = mid;
-    }
-    set(Math.floor(lo * 4) / 4);
+    if (best[n] === Infinity) return null;
+    var out = [];
+    for (var at = n; at > 0;) { var r = from[at]; out.unshift(r); at = r.start; }
+    return { rows: out, cost: best[n] };
   }
-  // the bottom line: the title gives way (ellipsis), the author and the time never do
-  function foot() {
-    var attr = view.querySelector('.bt-attr'), title = view.querySelector('.bt-title');
-    if (!attr || !title) return;
-    attr.style.minWidth = '0';
-    attr.style.flex = '1 1 auto';
-    attr.style.whiteSpace = 'nowrap';
-    title.style.minWidth = '0';
-    title.style.overflow = 'hidden';
-    title.style.textOverflow = 'ellipsis';
-    title.style.whiteSpace = 'nowrap';
+  function place(c, rs) {
+    var lines = [], rowOf = [], run = c.run, y = 0, prevDesc = 0, prevH = 0;
+    for (var q = 0; q < rs.length; q++) {
+      var r = rs[q], over = 0, desc = 0, k, p, w;
+      for (k = 0; k < r.parts.length; k++) {
+        p = r.parts[k]; w = p.time ? BLACK : BOLD;
+        if (p.top < 0.5) over = Math.max(over, (run.overshoot(p.i, p.j, w) * p.size) / 1000);
+        if (Math.abs(p.top + capOf(p.size) - r.h) < 0.5) desc = Math.max(desc, (run.descent(p.i, p.j, w) * p.size) / 1000);
+      }
+      if (q > 0) y += Math.max(TUNE.gap * Math.min(r.h, prevH), prevDesc + over + 0.1 * Math.min(r.h, prevH));
+      else y += over; // unlike the device, the round tops of the first row and the bottoms of the last stay in the box
+      for (k = 0; k < r.parts.length; k++) {
+        p = r.parts[k]; w = p.time ? BLACK : BOLD;
+        lines.push({ start: p.i, n: p.j - p.i, time: p.time, x: p.x - (run.lsb(p.i, w) * p.size) / 1000, y: y + p.top + capOf(p.size), size: p.size, tone: 0,
+          row: q, col: Math.round(p.x), short: !!r.short });
+        rowOf.push(q);
+      }
+      y += r.h; prevH = r.h; prevDesc = desc;
+    }
+    return { lines: lines, rowOf: rowOf, height: y + prevDesc, gaps: Math.max(0, rs.length - 1) };
+  }
+  function layoutPoster(units, W, H) {
+    var run = new Run(units), emph = units.map(function (u) { return u.emph; }), memo = {};
+    var best = null, lowest = null;
+    function tryOne(sc, tr) {
+      var c = { run: run, emph: emph, W: W, x0: 0, sc: sc, st: sc * tr, ph: H, memo: memo };
+      var r = rows(c);
+      if (!r) return Infinity;
+      var pl = place(c, r.rows), slack = H - pl.height, tMin = Infinity, cMax = 0;
+      for (var q = 0; q < pl.lines.length; q++) {
+        var l = pl.lines[q];
+        if (l.time) tMin = Math.min(tMin, l.size); else cMax = Math.max(cMax, l.size);
+      }
+      var short = tMin < Infinity && cMax > 0 && tMin < TUNE.contrast * cMax ? 8 + 40 * ((TUNE.contrast * cMax) / tMin - 1) : 0;
+      var cand = { cost: r.cost + short + TUNE.fill * (slack / H), sc: sc, tr: tr, pl: pl };
+      if (slack >= 0 && (!best || cand.cost < best.cost)) best = cand;
+      if (!lowest || pl.height < lowest.pl.height) lowest = cand;
+      return pl.height;
+    }
+    var scMin = (H / 60) * (1000 / CAP), scMax = (H / 2.5) * (1000 / CAP);
+    for (var t = 0; t < TUNE.ratios.length; t++)
+      for (var sc = scMin; sc <= scMax; sc *= 1.06) if (tryOne(sc, TUNE.ratios[t]) > H * 1.6) break;
+    if (best) {
+      var b0 = best;
+      for (var f = 0.97; f <= 1.03; f += 0.005) {
+        var trs = [b0.tr * 0.95, b0.tr, b0.tr * 1.05];
+        for (var z = 0; z < 3; z++) tryOne(b0.sc * f, trs[z]);
+      }
+    }
+    var squeeze = 1, chosen = best || lowest;
+    if (!best) squeeze = H / chosen.pl.height;
+    var pl = chosen.pl, slack = H - pl.height * squeeze;
+    var maxExtra = (0.5 * pl.height) / (pl.gaps + 1);
+    var extra = squeeze < 1 || !pl.gaps ? 0 : Math.min(maxExtra, slack / pl.gaps);
+    var top = squeeze < 1 ? 0 : (slack - extra * pl.gaps) / 2;
+    var lines = pl.lines.map(function (l, i) {
+      var o = { start: l.start, n: l.n, time: l.time, x: l.x, y: top + l.y + pl.rowOf[i] * extra, size: l.size, tone: 0, row: l.row, col: l.col, short: l.short || squeeze < 1 };
+      if (squeeze < 1) { o.x = l.x * squeeze; o.y = l.y * squeeze; o.size = l.size * squeeze; }
+      return o;
+    });
+    var parity = [], p = 0;
+    for (var u = 0; u < units.length; u++) { parity.push(p); if (units[u].end) p ^= 1; }
+    for (var k = 0; k < lines.length; k++) lines[k].tone = parity[lines[k].start];
+    return { lines: lines, run: run };
+  }
+
+  // ---------------------------------------------------------------- drawing
+  var NS = 'http://www.w3.org/2000/svg';
+  function draw() {
+    var box = view.querySelector('.bt-box'), svg = view.querySelector('.bt-svg');
+    if (!box || !svg) return;
+    CAP = measure('H', BOLD).actualBoundingBoxAscent || 700;
+    var W = box.clientWidth, H = box.clientHeight;
+    var units = unitsOf(PARTS), res = layoutPoster(units, W, H);
+    svg.setAttribute('width', W);
+    svg.setAttribute('height', H);
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H);
+    while (svg.firstChild) svg.removeChild(svg.firstChild);
+    for (var k = 0; k < res.lines.length; k++) {
+      var l = res.lines[k], mw = l.time ? BLACK : BOLD, dw = l.time ? BLACK : BIT1 ? LIGHT : BOLD;
+      var t = document.createElementNS(NS, 'text');
+      // ink from the layout's left edge to its right edge in the drawn weight (Light on 1-bit sits on the Bold
+      // widths): the pen starts one side bearing before the ink, textLength spreads the glyphs to the ink width
+      var k0 = l.size / 1000, first = measure(units[l.start].t, dw), last = measure(units[l.start + l.n - 1].t, dw);
+      var lsb = -first.actualBoundingBoxLeft, rsb = last.width - last.actualBoundingBoxRight;
+      var inkL = l.x + res.run.lsb(l.start, mw) * k0, inkW = res.run.ink(l.start, l.start + l.n, mw) * k0;
+      // drawn at 100 px and scaled, so the glyphs are the measured outlines at any size (no size-dependent hinting)
+      var f = l.size / 100;
+      t.setAttribute('transform', 'translate(' + (inkL - lsb * k0) + ' ' + l.y + ') scale(' + f + ')');
+      t.setAttribute('font-family', FAMILY);
+      t.setAttribute('font-weight', dw);
+      t.setAttribute('font-size', 100);
+      t.setAttribute('data-size', l.size);
+      t.setAttribute('fill', 'currentColor');
+      t.setAttribute('class', 'bt-line ' + (l.time ? 'bt-time text--black' : 'bt-ctx'));
+      // for the render checks: the row, the column (its left edge) and whether the row may end short
+      t.setAttribute('data-row', l.row);
+      t.setAttribute('data-col', l.col);
+      if (l.short) t.setAttribute('data-short', '1');
+      t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
+      t.setAttribute('textLength', (inkW + (lsb + rsb) * k0) / f);
+      t.setAttribute('lengthAdjust', 'spacing');
+      var tone = l.tone, text = '';
+      for (var u = l.start; u < l.start + l.n; u++) {
+        if (u > l.start && units[u - 1].end && !l.time) {
+          t.appendChild(span(text, l.time, tone));
+          text = '';
+          tone ^= 1;
+        }
+        text += (u > l.start ? ' ' : '') + units[u].t;
+      }
+      t.appendChild(span(text, l.time, tone));
+      svg.appendChild(t);
+    }
+  }
+  function span(text, time, tone) {
+    var s = document.createElementNS(NS, 'tspan');
+    s.setAttribute('class', time ? 'text--black' : TONE_CLASS[tone]);
+    s.setAttribute('fill', 'currentColor');
+    s.textContent = text;
+    return s;
   }
   function run() {
-    foot();
-    if (document.fonts && document.fonts.ready) document.fonts.ready.then(fit).catch(fit);
-    else fit();
+    var loads = [BLACK, BOLD, LIGHT].map(function (w) { return document.fonts.load(w + ' 100px ' + FAMILY, 'AZ'); });
+    Promise.all(loads).then(function () { return document.fonts.ready; }).then(draw, draw);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();

@@ -65,27 +65,42 @@ VIEWS = {
 }
 
 PROBE = '''<script>
+// Measures what was drawn: every line's ink box (glyph positions from the SVG, ink edges of the first and last glyph
+// from a canvas in the line's font), per slot.
 window.addEventListener('load', function () { setTimeout(function () {
-  var out = [];
+  var out = [], cv = document.createElement('canvas').getContext('2d');
   document.querySelectorAll('.view').forEach(function (v) {
-    var box = v.querySelector('.bt-box'), txt = v.querySelector('.bt-text'), foot = v.querySelector('.bt-foot');
-    if (!box || !txt) { out.push({missing: true}); return; }
-    var r = {
-      fs: parseFloat(getComputedStyle(txt).fontSize),
-      text_h: txt.scrollHeight, box_h: box.clientHeight, text_w: txt.scrollWidth, box_w: box.clientWidth,
-      view_h: v.clientHeight, view_w: v.clientWidth
-    };
-    if (foot) {
-      var fr = foot.getBoundingClientRect(), vr = v.getBoundingClientRect();
-      r.foot_inside = fr.bottom <= vr.bottom + 1 && fr.right <= vr.right + 1;
-      var au = v.querySelector('.bt-attr .shrink-0'), dg = v.querySelector('.bt-digits');
-      r.author_inside = !au || (au.getBoundingClientRect().right <= (dg ? dg.getBoundingClientRect().left : vr.right) + 1);
+    var box = v.querySelector('.bt-box'), lines = v.querySelectorAll('.bt-line');
+    if (!box || !lines.length) { out.push({missing: true}); return; }
+    var r = { w: box.clientWidth, h: box.clientHeight, lines: [] };
+    lines.forEach(function (t) {
+      var n = t.getNumberOfChars(), fsz = parseFloat(t.getAttribute('font-size')), text = t.textContent;
+      var M = t.getCTM(); // the text's units to the poster's
+      function at(x, y) { var p = t.ownerSVGElement.createSVGPoint(); p.x = x; p.y = y; return p.matrixTransform(M); }
+      // canvas ink boxes are coarse at small sizes: measured at 1000 px, scaled to the text's size
+      cv.font = t.getAttribute('font-weight') + ' 1000px Montserrat';
+      var z = fsz / 1000;
+      function mm(s) { var m = cv.measureText(s); return { actualBoundingBoxLeft: m.actualBoundingBoxLeft * z, actualBoundingBoxRight: m.actualBoundingBoxRight * z,
+        actualBoundingBoxAscent: m.actualBoundingBoxAscent * z, actualBoundingBoxDescent: m.actualBoundingBoxDescent * z }; }
+      var m0 = mm(text[0]), m1 = mm(text[n - 1]), mt = mm(text);
+      r.lines.push({
+        time: t.classList.contains('bt-time'), size: fsz * M.a, row: +t.getAttribute('data-row'), col: +t.getAttribute('data-col'),
+        short: t.hasAttribute('data-short'), text: text.slice(0, 24),
+        l: at(t.getStartPositionOfChar(0).x - m0.actualBoundingBoxLeft, 0).x,
+        r: at(t.getStartPositionOfChar(n - 1).x + m1.actualBoundingBoxRight, 0).x,
+        top: at(0, -mt.actualBoundingBoxAscent).y, bottom: at(0, mt.actualBoundingBoxDescent).y
+      });
+    });
+    var tb = v.querySelector('.title_bar'), vr = v.getBoundingClientRect(), br = box.getBoundingClientRect();
+    if (tb) {
+      var tr = tb.getBoundingClientRect();
+      r.bar_inside = tr.bottom <= vr.bottom + 1 && tr.right <= vr.right + 1 && tr.top >= br.bottom - 1;
     }
     out.push(r);
   });
   var d = document.createElement('pre'); d.id = '__probe'; d.textContent = JSON.stringify(out);
   document.body.appendChild(d);
-}, 3000); });
+}, 4000); });
 </script>'''
 
 
@@ -123,6 +138,7 @@ def view_div(html, view):
 def page(html, view, classes):
     """The view (in a mashup for half/quadrant) on a screen with the device's classes, plus the probe."""
     html = html.replace('<div class="screen">', f'<div class="screen {classes}">', 1)
+    html = html.replace('<head>', '<head><meta charset="utf-8">', 1)  # TRMNL serves UTF-8; a file:// page needs saying
     if VIEWS[view]:
         mashup, n = VIEWS[view]
         a, b = view_div(html, view)
@@ -136,22 +152,34 @@ def chrome(args, url):
 
 
 def check(case, dev, view, probe):
+    """No ink outside the poster box, every row from edge to edge, the lines of a stack equally wide, nothing under
+    MIN_PX (all within 1 px)."""
     errors = []
     for i, r in enumerate(probe):
         where = f'{case} {dev} {view} slot {i}'
         if r.get('missing'):
             errors.append(f'{where}: no poster')
             continue
-        if r['text_h'] > r['box_h'] + 1:
-            errors.append(f'{where}: text {r["text_h"]}px in a {r["box_h"]}px box')
-        if r['text_w'] > r['box_w'] + 1:
-            errors.append(f'{where}: text {r["text_w"]}px wide in {r["box_w"]}px')
-        if r['fs'] < MIN_PX:
-            errors.append(f'{where}: context {r["fs"]}px < {MIN_PX}px')
-        if 'foot_inside' in r and not r['foot_inside']:
-            errors.append(f'{where}: bottom line outside the view')
-        if r.get('author_inside') is False:
-            errors.append(f'{where}: author cut or under the time')
+        rows = {}
+        for ln in r['lines']:
+            if ln['size'] < MIN_PX:
+                errors.append(f'{where}: {ln["text"]!r} at {ln["size"]:.1f}px < {MIN_PX}px')
+            if ln['l'] < -1 or ln['r'] > r['w'] + 1 or ln['top'] < -1 or ln['bottom'] > r['h'] + 1:
+                errors.append(f'{where}: {ln["text"]!r} outside the {r["w"]}x{r["h"]} box')
+            rows.setdefault(ln['row'], []).append(ln)
+        for q, ls in rows.items():
+            left, right = min(x['l'] for x in ls), max(x['r'] for x in ls)
+            if abs(left) > 1 or (abs(right - r['w']) > 1 and not any(x['short'] for x in ls)):
+                errors.append(f'{where}: row {q} spans {left:.1f}..{right:.1f} of 0..{r["w"]}')
+            cols = {}
+            for x in ls:
+                if not x['time']:
+                    cols.setdefault(x['col'], []).append(x['r'] - x['l'])
+            for c, ws in cols.items():
+                if max(ws) - min(ws) > 1:
+                    errors.append(f'{where}: row {q} column {c} lines {min(ws):.1f}..{max(ws):.1f}px wide')
+        if r.get('bar_inside') is False:
+            errors.append(f'{where}: title bar outside the view or over the poster')
     return errors
 
 
@@ -176,7 +204,7 @@ def main():
                     m = re.search(r'<pre id="__probe">(.*?)</pre>', dom, re.S)
                     probe = json.loads(m.group(1).replace('&quot;', '"')) if m else [{'missing': True}]
                     errors += check(case, dev, view, probe)
-                    sizes.append((case, dev, view, min(r.get('fs', 0) for r in probe)))
+                    sizes.append((case, dev, view, min((ln['size'] for r in probe for ln in r.get('lines', []) if not ln['time']), default=0)))
                     png = OUT / f'{case}-{dev}-{view}.png'
                     chrome(flags + [f'--screenshot={png}'], f.as_uri())
                     levels = {1: 2, 2: 4, 4: 16}[depth]
