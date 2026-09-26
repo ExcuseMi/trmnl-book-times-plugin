@@ -15,4 +15,4 @@ custom_fields:
 variables:
   trmnl:
     plugin_settings:
-      instance_name: Book Times
+      instance_name: Minute by Minute

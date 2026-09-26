@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Book Times data build: one JSON file per minute of the day (docs/m/HHMM.json, 1440 files) for the polling URL.
+"""Minute by Minute data build: one JSON file per minute of the day (docs/m/HHMM.json, 1440 files) for the polling URL.
 
 The selection is a port of tiny-paper's literature clock (plugins/litclock/converter/src/text.ts, posters()):
 per 12-hour minute the best Project Gutenberg public-domain row, else the best sfw row of the quote collections.

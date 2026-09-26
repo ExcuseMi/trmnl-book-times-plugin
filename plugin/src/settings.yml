@@ -11,9 +11,29 @@ polling_url: 'https://excusemi.github.io/trmnl-book-times-plugin/m/{{ "now" | da
 polling_headers: ''
 polling_body: ''
 id: 487888
+oauth_enabled: 'false'
+oauth_pkce_enabled: 'no'
+oauth_authorize_url: ''
+oauth_token_url: ''
+oauth_scopes: ''
+oauth_scope_separator: ''
+oauth_refresh_url: ''
+oauth_auth_params: ''
+oauth_token_headers: ''
+oauth_token_site: ''
+oauth_token_params: ''
+oauth_token_request_auth_method: ''
+oauth_body_format: ''
+oauth_token_response_metadata: ''
+oauth_authorization_method: ''
+oauth_refresh_params: ''
+oauth_token_field_name: ''
+oauth_expiry_field_name: ''
+oauth_expiry_strategy: ''
+oauth_fixed_expiry_ms: ''
 custom_fields:
 - keyname: author_info
-  name: About Book Times
+  name: About Minute by Minute
   field_type: author_bio
   description: "<strong>A literature clock.</strong> Every time your screen refreshes it shows a passage from a book that names that very minute, set as a poster: the time words large and bold, the story around them, the book and its author at the bottom.<br /><br />1440 minutes, each its own passage. Most come from public-domain books on <a href='https://www.gutenberg.org' target='_blank'>Project Gutenberg</a>; the few minutes they miss come from the quote collections of <a href='https://github.com/JohsEnevoldsen/literature-clock' target='_blank'>JohsEnevoldsen/literature-clock</a> (CC BY-NC-SA 2.5), <a href='https://github.com/cdmoro/literature-clock' target='_blank'>cdmoro/literature-clock</a> and <a href='https://github.com/utrost/LiteratureClock' target='_blank'>utrost/LiteratureClock</a> (AGPL-3.0), used under their terms for non-commercial use.<br /><br />TRMNL redraws a screen every 5 minutes at most, so the time in the corner says which minute the passage is for."
   github_url: https://github.com/ExcuseMi/trmnl-book-times-plugin
@@ -41,6 +61,6 @@ custom_fields:
   description: 'The book and its author under the passage. Keep it on: the passages are quoted with credit (Project Gutenberg, <a href=''https://github.com/JohsEnevoldsen/literature-clock'' target=''_blank''>JohsEnevoldsen</a>, <a href=''https://github.com/cdmoro/literature-clock'' target=''_blank''>cdmoro</a>, <a href=''https://github.com/utrost/LiteratureClock'' target=''_blank''>utrost</a>).'
   default: true
   optional: true
-name: Book Times
+name: Minute by Minute
 description:
 refresh_interval: 15
