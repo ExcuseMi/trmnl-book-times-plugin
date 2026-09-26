@@ -62,5 +62,5 @@ custom_fields:
   default: true
   optional: true
 name: Minute by Minute
-description: 'The current time, told by a passage from a book: a new literary quote for every minute of the day.'
+description: 'A book passage for every minute'
 refresh_interval: 15
