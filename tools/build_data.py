@@ -1,11 +1,12 @@
 #!/usr/bin/env python3
 """Minute by Minute data build: one JSON file per minute of the day (docs/m/HHMM.json, 1440 files) for the polling URL.
 
-The selection is a port of tiny-paper's literature clock (plugins/litclock/converter/src/text.ts, posters()):
-per 12-hour minute the best Project Gutenberg public-domain row, else the best sfw row of the quote collections.
-TRMNL shows a 24-hour day, so each 12-hour pick is checked against the half of the day it lands in: a row that
-names its half (the collections' time24; midnight / noon / midday in the time words) and names the other one gives
-way to the best eligible row of that minute that names the right half; if there is none, the pick serves both halves.
+The passages are tiny-paper's (plugins/litclock/data/passages.json), ranked there: a time phrase first, public
+domain first, hidden time last (gen/corpus.py rank_key). TRMNL shows a 24-hour day, so each minute of the day takes
+the best-ranked row that names its half of the day (time24: the collections' own, or tiny-paper's reading of the
+context for its Gutenberg rows; midnight / noon / midday), else the best row that names no half, and a row naming
+the other half only when nothing else is left (`half_swap`). When both halves would show the same passage and an
+equally good other one exists, the afternoon takes that one. tiny-paper's own 12-hour pick is `pick12` (posters()).
 
 Usage:
   python3 tools/build_data.py                        # data/passages.jsonl -> docs/m/*.json
@@ -27,6 +28,7 @@ ROWS_FILE = ROOT / 'data' / 'passages.jsonl'
 OUT_DIR = ROOT / 'docs' / 'm'
 
 MINUTES = 720
+KEEP = 4  # rows kept per minute and half of the day (import_rows): room for the afternoon to avoid the morning's
 
 # --- text.ts port ---------------------------------------------------------------------------------------------
 
@@ -62,7 +64,7 @@ def units(text, emph_words=()):
 
     `|` (a collection's phrase marker, never a WORD) is dropped first; tiny-paper never renders such a row.
     """
-    text = text.replace('|', '')
+    text = drawable(text.replace('|', ''))
     out = []
     pending = []
     emph = set(emph_words)
@@ -111,11 +113,12 @@ def units(text, emph_words=()):
         at = m.end()
         e = wi in emph
         post = []
-        meridian = re.match(r'\.\s?[mM]\.', text[at:]) if word.upper() in ('A', 'P') else None
+        # "p.m.", "p. m.", and "P.M ." as some scans have it (the stop spaced off, or missing)
+        meridian = re.match(r'\.\s?[mM](?:\s?\.)?(?![A-Za-z])', text[at:]) if word.upper() in ('A', 'P') else None
         if meridian:
             at += len(meridian.group(0))
             e = e or (wi + 1) in emph
-            word += '.' + meridian.group(0)[-2]
+            word += '.' + meridian.group(0).replace(' ', '').replace('.', '')
             if capital_next(at):
                 post.append('.')
             else:
@@ -136,9 +139,14 @@ def units(text, emph_words=()):
     return out
 
 
+NOBLE = r'(?:graf|count|countess|baron|freiherr)'
+
+
 def author_name(author, source):
+    """text.ts authorName(): utrost's "Last, First" turned round; a noble title at either end dropped."""
     m = re.fullmatch(r'([^,\s]+), ([^,]+)', author.strip()) if source == 'utrost' else None
-    return f'{m.group(2)} {m.group(1)}' if m else author
+    a = f'{m.group(2)} {m.group(1)}' if m else author.strip()
+    return re.sub(rf'\s+{NOBLE}$', '', re.sub(rf'^{NOBLE}\s+', '', a, flags=re.I), flags=re.I)
 
 
 def short_title(t):
@@ -152,13 +160,23 @@ def short_title(t):
 
 # --- selection ------------------------------------------------------------------------------------------------
 
+def drawable(text):
+    """Editorial brackets as parentheses (text.ts drawable())."""
+    return text.replace('[', '(').replace(']', ')')
+
+
+def drawable_row(text):
+    """Every character one tiny-paper can draw (text.ts drawableRow()): rows with others are skipped."""
+    return re.fullmatch(r"[A-Za-z0-9\s.,;:!?'\"()&\-/\u2018\u2019\u201c\u201d]*", drawable(text)) is not None
+
+
 def is_gutenberg_pd(r):
     return r['source'] == 'gutenberg' and r['rights'] == 'public_domain'
 
 
 def eligible(r):
-    """A row tiny-paper can pick: Gutenberg public domain, or any sfw row."""
-    return is_gutenberg_pd(r) or bool(r['sfw'])
+    """A row either tool can show: sfw, and drawable."""
+    return bool(r['sfw']) and drawable_row(r['text'])
 
 
 def half_of(r):
@@ -175,22 +193,27 @@ def half_of(r):
 
 
 def pick12(cands):
-    """tiny-paper posters(): the best-ranked Gutenberg public-domain row, else the best-ranked sfw row."""
-    best = [r for r in cands if is_gutenberg_pd(r)]
-    if best:
-        return min(best, key=lambda r: r['rank'])
-    other = [r for r in cands if r['sfw']]
-    return min(other, key=lambda r: r['rank']) if other else None
+    """tiny-paper posters(): the best-ranked eligible row of the 12-hour minute."""
+    ok = [r for r in cands if eligible(r)]
+    return min(ok, key=lambda r: r['rank']) if ok else None
 
 
-def pick24(cands, half):
-    """The 12-hour pick, or the best eligible row naming `half` when the pick names the other half."""
-    r = pick12(cands)
-    if r is None or half_of(r) in (None, half):
-        return r, False
-    match = sorted((c for c in cands if eligible(c) and half_of(c) == half),
-                   key=lambda c: (0 if is_gutenberg_pd(c) else 1, c['rank']))
-    return (match[0], True) if match else (r, False)
+def tier(r, half):
+    """0: names this half, 1: names no half, 2: names the other half."""
+    h = half_of(r)
+    return 1 if h is None else 0 if h == half else 2
+
+
+def pick24(cands, half, avoid=None):
+    """(row, half_swap): the best row for this half of the day (tier, then rank); `avoid` (a text) is passed over
+    when another row of the same tier exists."""
+    ok = sorted((r for r in cands if eligible(r)), key=lambda r: (tier(r, half), r['rank']))
+    if not ok:
+        return None, False
+    r = ok[0]
+    if avoid is not None and r['text'] == avoid:
+        r = next((c for c in ok[1:] if tier(c, half) == tier(r, half) and c['text'] != avoid), r)
+    return r, tier(r, half) == 2
 
 
 def parts(us):
@@ -267,26 +290,26 @@ def build(rows):
     """{minute24: poster} for all 1440 minutes."""
     per = by_minute(rows)
     result = {}
-    for m24 in range(1440):
-        r, swapped = pick24(per.get(m24 % MINUTES, []), 0 if m24 < MINUTES else 1)
-        if r is None:
-            raise SystemExit(f'no passage for {m24 // 60:02d}:{m24 % 60:02d}')
-        result[m24] = poster(r, m24, swapped)
+    for m in range(MINUTES):
+        am, swap_am = pick24(per.get(m, []), 0)
+        pm, swap_pm = pick24(per.get(m, []), 1, avoid=am['text'] if am else None)
+        for m24, r, swapped in ((m, am, swap_am), (m + MINUTES, pm, swap_pm)):
+            if r is None:
+                raise SystemExit(f'no passage for {m24 // 60:02d}:{m24 % 60:02d}')
+            result[m24] = poster(r, m24, swapped)
     return result
 
 
 def import_rows(src):
-    """Keeps the rows the selection can reach: every Gutenberg public-domain row, and the sfw collection rows of
-    the minutes Gutenberg leaves open or whose Gutenberg row names a half of the day. nsfw rows are left out."""
+    """Keeps the rows the selection can reach, tags and all: per minute the best KEEP eligible rows naming the
+    morning, naming the afternoon and naming no half. nsfw and undrawable rows are left out."""
     rows = load_rows(src)
     per = by_minute(rows)
     keep = []
     for m in range(MINUTES):
-        cands = per.get(m, [])
-        gut = [r for r in cands if is_gutenberg_pd(r)]
-        keep += gut
-        if not gut or any(half_of(r) is not None for r in gut):
-            keep += [r for r in cands if not is_gutenberg_pd(r) and r['sfw']]
+        ok = sorted((r for r in per.get(m, []) if eligible(r)), key=lambda r: r['rank'])
+        for h in (0, 1, None):
+            keep += [r for r in ok if half_of(r) == h][:KEEP]
     keep.sort(key=lambda r: (minute_of(r['time']), r['rank']))
     with open(ROWS_FILE, 'w', encoding='utf-8') as f:
         for r in keep:

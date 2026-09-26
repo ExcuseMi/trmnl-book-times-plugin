@@ -18,8 +18,8 @@ const text = await import(pathToFileURL(join(litclock, 'converter/src/text.ts'))
 const rows = text.loadRows(join(litclock, 'data/passages.json'));
 const set = text.posters(rows);
 
-// Every 7th minute plus every minute Gutenberg leaves to the collections.
-const picked = set.posters.filter((p, i) => i % 7 === 0 || p.source !== 'gutenberg');
+// Every 5th minute (144), from every source.
+const picked = set.posters.filter((p, i) => i % 5 === 0);
 const out = picked.map((p) => ({
   minute: p.minute,
   time: text.timeOf(p.minute),
