@@ -28,7 +28,8 @@ PLUGIN = ROOT / 'plugin'
 OUT = ROOT / 'tests' / 'out'
 SCREENS = ROOT / 'docs' / 'screens'
 CHROME = shutil.which('google-chrome') or shutil.which('chromium') or 'chromium'
-MIN_PX = 10  # smallest context size (CSS px) accepted anywhere
+MIN_PX = 10
+PALETTE = ROOT / 'tests' / 'fixtures' / 'bwry.png'  # black, white, red, yellow: the 4-color panel's inks  # smallest context size (CSS px) accepted anywhere
 
 # (name, minute file, settings)
 CASES = {
@@ -48,11 +49,13 @@ DEVICES = {
     'og2': ('screen--ogv2 screen--md screen--density-1x screen--2bit', 800, 480, 1, 2),
     'x4': ('screen--v2 screen--lg screen--density-2x screen--4bit', 1872, 1404, 1, 4),
     'x4p': ('screen--v2 screen--lg screen--density-2x screen--4bit screen--portrait', 1404, 1872, 1, 4),
+    # TRMNL OG with a black / white / red / yellow panel (framework screen--color-4bwry: 4-bit, four inks)
+    'bwry': ('screen--og screen--md screen--density-1x screen--4bit screen--color-4bwry', 800, 480, 1, 'bwry'),
 }
 
 # previews kept in docs/screens (--screens): case-device-view
 SCREEN_SET = [
-    'reference-x4-full', 'reference-og2-full', 'typical-og1-full', 'typical-og2-full', 'typical-x4-full', 'typical-x4p-full',
+    'reference-x4-full', 'reference-og2-full', 'reference-bwry-full', 'typical-bwry-full', 'typical-bwry-quadrant', 'typical-og1-full', 'typical-og2-full', 'typical-x4-full', 'typical-x4p-full',
     'typical-og2-half_horizontal', 'typical-og2-half_vertical', 'typical-og2-quadrant',
     'longest-og1-full', 'longest-og2-quadrant', 'longest-x4p-half_vertical', 'shortest-og1-full',
     'long-gutenberg-og1-half_vertical', 'long-title-og2-quadrant', 'noon-og2-half_horizontal', 'bare-og1-full',
@@ -227,9 +230,13 @@ def main():
                     sizes.append((case, dev, view, min((ln['size'] for r in probe for ln in r.get('lines', []) if not ln['time']), default=0)))
                     png = OUT / f'{case}-{dev}-{view}.png'
                     chrome(flags + [f'--screenshot={png}'], f.as_uri())
-                    levels = {1: 2, 2: 4, 4: 16}[depth]
-                    subprocess.run(['magick', str(png), '-alpha', 'off', '-colorspace', 'gray', '-dither', 'None',
-                                    '-colors', str(levels), '-depth', '8', str(png)], check=True)
+                    if depth == 'bwry':  # the panel's four inks
+                        subprocess.run(['magick', str(png), '-alpha', 'off', '-dither', 'None', '-remap', str(PALETTE),
+                                        str(png)], check=True)
+                    else:
+                        levels = {1: 2, 2: 4, 4: 16}[depth]
+                        subprocess.run(['magick', str(png), '-alpha', 'off', '-colorspace', 'gray', '-dither', 'None',
+                                        '-colors', str(levels), '-depth', '8', str(png)], check=True)
     for s in sizes:
         print(f'{s[0]:15} {s[1]:4} {s[2]:16} context {s[3]:.1f}px')
     if args.screens:
