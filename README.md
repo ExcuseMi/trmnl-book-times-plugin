@@ -1,8 +1,8 @@
-# TRMNL Book Times
+# TRMNL Minute by Minute
 
 A literature clock for [TRMNL](https://trmnl.com): every refresh shows a passage from a book that names the current minute, set as a typographic poster in the style of [tiny-paper](https://github.com/ExcuseMi/tiny-paper)'s Literature Clock: Montserrat in capitals, the time words in Black and the largest, every line of the story around them stretched to the full width, the book, its author and the time in TRMNL's title bar. 1440 minutes, each with its own passage.
 
-![Book Times on the TRMNL OG](docs/screens/typical-og1-full.png)
+![Minute by Minute on the TRMNL OG](docs/screens/typical-og1-full.png)
 
 ## Layouts
 
@@ -31,7 +31,10 @@ A literature clock for [TRMNL](https://trmnl.com): every refresh shows a passage
 | Minute | the polling URL names it with Liquid: `{{ "now" \| date: "%s" \| plus: trmnl.user.utc_offset \| date: "%H%M" }}` | TRMNL polls right before it renders, so the passage is for the minute the screen is drawn, in the user's time zone |
 | Refresh | every 5 minutes (TRMNL's shortest) | a screen stays up 5 to 15 minutes, so the corner shows which minute the passage is for |
 | Layout | a port of tiny-paper's `plugins/litclock/converter/src/layout.ts` (MIT) in `shared.liquid`, run after Montserrat (Google Fonts, OFL-1.1) loads and measured with a canvas: every context line sized to the full width, time words as blocks with context stacked beside them, rows chosen by a DP, the context size and time/context ratio scanned to fill the height; a short passage leaves room above and below, as in tiny-paper | the same poster as tiny-paper for the same minute and size; the framework's fit-value scales one element, a poster sizes every line on its own |
-| Tones | time words black; context in two grays alternating by sentence (2-bit `gray-30` / `gray-55`, 4-bit `gray-35` / `gray-55`), black in Light on 1-bit | solid levels, no dithered text |
+| Tones | time words black; context alternating by sentence between a solid gray (2-bit `gray-30`, 4-bit `gray-35`; Light black on 1-bit) and outlined letters (black outline, white inside; `gray-55` below 22 px, where an outline would not read) | solid levels, no dithered text; the outline keeps the alternation on 1-bit |
+| Punctuation | quote marks, commas and stops around a time word are not highlighted: Bold at 0.36 of the line's size in the context gray, opening marks hung from the cap height | only the time words are black and large |
+| Tall views | filling the height counts more the taller the view (portrait, half vertical) | tiny-paper's weighting is tuned for landscape posters |
+| Title bar | the framework's `title_bar`: icon (`image--adaptive`, repainted in dark mode), book title, author and time; a long title loses words from the end, the author and time are never cut | |
 | No data | if the fetch fails, the time in digits fills the screen | |
 
 ### Selection

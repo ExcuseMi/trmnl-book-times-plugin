@@ -79,23 +79,40 @@ window.addEventListener('load', function () { setTimeout(function () {
       var M = t.getCTM(); // the text's units to the poster's
       function at(x, y) { var p = t.ownerSVGElement.createSVGPoint(); p.x = x; p.y = y; return p.matrixTransform(M); }
       // canvas ink boxes are coarse at small sizes: measured at 1000 px, scaled to the text's size
-      cv.font = t.getAttribute('font-weight') + ' 1000px Montserrat';
-      var z = fsz / 1000;
-      function mm(s) { var m = cv.measureText(s); return { actualBoundingBoxLeft: m.actualBoundingBoxLeft * z, actualBoundingBoxRight: m.actualBoundingBoxRight * z,
+      // each character in its own tspan's font (a time word's marks are smaller Bold)
+      function mm(s, el) {
+        el = el || t;
+        var w = el.getAttribute('font-weight') || t.getAttribute('font-weight'), z = parseFloat(el.getAttribute('font-size') || fsz) / 1000;
+        cv.font = w + ' 1000px Montserrat';
+        var m = cv.measureText(s); return { actualBoundingBoxLeft: m.actualBoundingBoxLeft * z, actualBoundingBoxRight: m.actualBoundingBoxRight * z,
         actualBoundingBoxAscent: m.actualBoundingBoxAscent * z, actualBoundingBoxDescent: m.actualBoundingBoxDescent * z }; }
-      var m0 = mm(text[0]), m1 = mm(text[n - 1]), mt = mm(text);
+      var spans = t.querySelectorAll('tspan'), s0 = spans[0], s1 = spans[spans.length - 1];
+      var m0 = mm(text[0], s0), m1 = mm(text[n - 1], s1), mt = mm(text);
+      // vertical ink: each tspan in its own font at its own y (a time word's opening marks hang from the cap height)
+      var vt = -mt.actualBoundingBoxAscent, vb = mt.actualBoundingBoxDescent;
+      if (spans.length) {
+        vt = Infinity; vb = -Infinity;
+        spans.forEach(function (sp) {
+          if (!sp.textContent.trim()) return;
+          var y = parseFloat(sp.getAttribute('y') || 0), ms = mm(sp.textContent, sp);
+          vt = Math.min(vt, y - ms.actualBoundingBoxAscent); vb = Math.max(vb, y + ms.actualBoundingBoxDescent);
+        });
+      }
       r.lines.push({
         time: t.classList.contains('bt-time'), size: fsz * M.a, row: +t.getAttribute('data-row'), col: +t.getAttribute('data-col'),
         short: t.hasAttribute('data-short'), text: text.slice(0, 24),
         l: at(t.getStartPositionOfChar(0).x - m0.actualBoundingBoxLeft, 0).x,
         r: at(t.getStartPositionOfChar(n - 1).x + m1.actualBoundingBoxRight, 0).x,
-        top: at(0, -mt.actualBoundingBoxAscent).y, bottom: at(0, mt.actualBoundingBoxDescent).y
+        top: at(0, vt).y, bottom: at(0, vb).y
       });
     });
     var tb = v.querySelector('.title_bar'), vr = v.getBoundingClientRect(), br = box.getBoundingClientRect();
     if (tb) {
       var tr = tb.getBoundingClientRect();
       r.bar_inside = tr.bottom <= vr.bottom + 1 && tr.right <= vr.right + 1 && tr.top >= br.bottom - 1;
+      // the author and time never cut: the instance inside the bar, not overflowing itself
+      var ins = tb.querySelector('.instance');
+      r.instance_ok = !ins || (ins.getBoundingClientRect().right <= tr.right + 1 && ins.scrollWidth <= ins.clientWidth + 1);
     }
     out.push(r);
   });
@@ -117,7 +134,7 @@ def build(case, tmp):
     work.mkdir()
     shutil.copytree(PLUGIN / 'src', work / 'src')
     fields = {'show_time': True, 'hour_format': '24', 'show_attribution': True, **settings}
-    variables = {'trmnl': {'plugin_settings': {'instance_name': 'Book Times'}}, **data}
+    variables = {'trmnl': {'plugin_settings': {'instance_name': 'Minute by Minute'}}, **data}
     cfg = {'time_zone': 'Europe/Brussels', 'custom_fields': fields, 'variables': variables}
     # JSON is YAML
     (work / '.trmnlp.yml').write_text(json.dumps(cfg, ensure_ascii=False), encoding='utf-8')
@@ -181,6 +198,8 @@ def check(case, dev, view, probe):
                     errors.append(f'{where}: row {q} column {c} lines {min(ws):.1f}..{max(ws):.1f}px wide')
         if r.get('bar_inside') is False:
             errors.append(f'{where}: title bar outside the view or over the poster')
+        if r.get('instance_ok') is False:
+            errors.append(f'{where}: the author or time cut in the title bar')
     return errors
 
 
