@@ -12,9 +12,7 @@ measures Montserrat with a canvas.
 Merge variables from the polled file: time (HH:MM, 24-hour), parts ([text, 1 for time words / 0 for context], the
 spacing inside the text), title, author (plus mode, source, rights, license: the row's tags, unused here).
 
-Code MIT. The passages: Project Gutenberg (public domain) and, for the minutes Gutenberg lacks, the quote collections
-JohsEnevoldsen/literature-clock (CC BY-NC-SA 2.5), cdmoro/literature-clock and utrost/LiteratureClock (AGPL-3.0),
-non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from Google Fonts. See README.md.
+Code MIT. Montserrat: SIL Open Font License 1.1, from Google Fonts. See README.md.
 {% endcomment %}
 {% template main %}
 {%- assign cf = trmnl.plugin_settings.custom_fields_values -%}
@@ -73,6 +71,12 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
   var CAP = 700; // replaced by the measured cap height (font units)
   // context tones by sentence: no dithering on any depth (1-bit black, 2-bit #555 / #AAA, 4-bit gray-35 / gray-55)
   var TONE_CLASS = ['text--black 2bit:text--gray-30 4bit:text--gray-35', 'text--black 2bit:text--gray-55 4bit:text--gray-55'];
+  // Color panels (framework screen--color-*): black and white inks plus red and / or yellow, so grays would dither.
+  // The first tone takes the red ink (black on a yellow-only panel), outlined letters are filled yellow.
+  var CL = screenEl ? screenEl.classList : null;
+  var RED = !!CL && (CL.contains('screen--color-4bwry') || CL.contains('screen--color-3bwr'));
+  var YELLOW = !!CL && (CL.contains('screen--color-4bwry') || CL.contains('screen--color-3bwy'));
+  if (RED || YELLOW) TONE_CLASS = [RED ? 'text--red' : 'text--black', 'text--black'];
   // the lighter tone as outlined letters (stroke only) where the outline is thick enough to read
   var OUTLINE_MIN_PX = 22, OUTLINE_PX = 1.6;
   // punctuation around a time word is not part of the highlight: drawn in Bold at MARK of the line's size, in the
@@ -507,7 +511,10 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
       // outlined: the stroke painted first and the letters filled white over it, so the font's overlapping contours
       // (Montserrat is a variable font) leave no lines inside; the fill covers the stroke's inner half, hence 2x.
       // Plain black and white: TRMNL's dark mode inverts the screen (images aside). Width in the DRAW px space.
-      s.setAttribute('fill', '#fff');
+      if (YELLOW) {
+        s.setAttribute('class', 'text--yellow'); // the fill from the framework's yellow ink
+        s.setAttribute('fill', 'currentColor');
+      } else s.setAttribute('fill', '#fff');
       s.setAttribute('stroke', '#000');
       s.setAttribute('paint-order', 'stroke');
       s.setAttribute('stroke-width', (2 * OUTLINE_PX * DRAW) / size);
