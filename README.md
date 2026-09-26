@@ -39,16 +39,17 @@ A literature clock for [TRMNL](https://trmnl.com): every refresh shows a passage
 
 ### Selection
 
-A port of tiny-paper's literature clock (`plugins/litclock/converter/src/text.ts`), so both pick the same passage per minute.
+The passages and their ranking are tiny-paper's (`plugins/litclock/data/passages.json`: a time phrase first, public domain first, hidden time last); `tools/build_data.py` picks per minute of the 24-hour day.
 
 | Step | Rule |
 |---|---|
-| 12-hour minute | the best Project Gutenberg public-domain passage; for the 26 minutes Gutenberg lacks, the best sfw quote of the collections |
-| 24-hour day | a pick that names its half of the day (the collections' 24-hour time; midnight, noon) and names the other one gives way to the best passage of that minute naming the right half; with none, one passage serves both halves (Gutenberg's are mostly neutral: "twenty past six") |
-| Result | 1440 / 1440 minutes; 1387 from Gutenberg; 25 minutes take a passage of their own half (12:00 noon, 19:03, 05:38 and others); 20:41 and 21:29 reuse the morning's quote (no evening one exists) |
-| Text | curly quotes, a.m./p.m. as one word, scan page numbers dropped, utrost's "Last, First" authors turned round, subtitles cut from titles |
+| Eligible | sfw rows only; rows with characters tiny-paper cannot draw are left out (the same rows in both) |
+| 24-hour minute | the best-ranked row that names its half of the day (the collections' 24-hour time; for Gutenberg rows, tiny-paper's reading of the context: "in the morning", "dinner", "to-night" at twelve past twelve; midnight, noon), else the best row naming no half, and a row naming the other half only when nothing else is left |
+| Both halves | when morning and afternoon would show the same passage and another equally good one exists, the afternoon takes that one |
+| Result | 1440 / 1440 minutes; 1422 a time phrase ("twenty minutes past seven"), 18 hidden time (their only time phrases name the other half); 3 minutes fall back to a passage of the other half (14:52, 21:29, 22:13) |
+| Text | curly quotes, a.m./p.m. as one word, scan page numbers dropped, utrost's "Last, First" authors turned round, noble titles dropped ("graf Leo Tolstoy"), subtitles cut from titles, editorial brackets as parentheses |
 
-`data/passages.jsonl` holds the rows the selection can reach (1556 of tiny-paper's 15762: every Gutenberg row, and the sfw collection rows of the minutes that need them), each with its tags (`source`, `rights`, `dataset_license`, `sfw`), so rows can be dropped by source or license later. Every published file carries the same tags.
+`data/passages.jsonl` holds the rows the selection can reach (4590 of tiny-paper's 15981: per minute the best four rows naming the morning, the afternoon and no half), each with its tags (`source`, `rights`, `dataset_license`, `sfw`, `book` for a quote tiny-paper found in a Gutenberg book), so rows can be dropped by source or license later. Every published file carries the same tags.
 
 ## Data licenses and credits
 
@@ -56,12 +57,13 @@ The code is MIT (`LICENSE`). The passages are not: each keeps the terms of where
 
 | Source | Minutes (of 1440) | Terms |
 |---|---|---|
-| [Project Gutenberg](https://www.gutenberg.org), books whose every author died by 1955 | 1387 | public domain (EU and US); passages found by tiny-paper's scan |
-| [JohsEnevoldsen/literature-clock](https://github.com/JohsEnevoldsen/literature-clock) | 35 | CC BY-NC-SA 2.5: attribution, **non-commercial**, share alike |
-| [utrost/LiteratureClock](https://github.com/utrost/LiteratureClock) | 17 | AGPL-3.0 repository; quote rights not addressed |
-| [cdmoro/literature-clock](https://github.com/cdmoro/literature-clock) | 1 | MIT for its code; quotes without a verified license |
+| [Project Gutenberg](https://www.gutenberg.org), books whose every author died by 1955 | 287 | public domain (EU and US); passages found by tiny-paper's scan |
+| [JohsEnevoldsen/literature-clock](https://github.com/JohsEnevoldsen/literature-clock) | 736 | CC BY-NC-SA 2.5: attribution, **non-commercial**, share alike |
+| [utrost/LiteratureClock](https://github.com/utrost/LiteratureClock) | 407 | AGPL-3.0 repository; quote rights not addressed |
+| [cdmoro/literature-clock](https://github.com/cdmoro/literature-clock) | 10 | MIT for its code; quotes without a verified license |
 
-- The 53 collection minutes quote books that are mostly still in copyright (39 of them), as short excerpts with title and author. Use them for personal, non-commercial display only; `data/` and `docs/m/` are shared under the same terms (CC BY-NC-SA 2.5 and AGPL-3.0 as they apply to each row).
+- Of the 1440 books quoted: 479 public domain, 820 still in copyright, 141 unknown. The collection quotes are short excerpts with title and author. Use them for personal, non-commercial display only; `data/` and `docs/m/` are shared under the same terms (CC BY-NC-SA 2.5 and AGPL-3.0 as they apply to each row).
+- Collection quotes found word for word in a Gutenberg book carry that book's title and author (tiny-paper's `gen/datasets.py verify`); the others keep the collections' labels.
 - Every screen shows the book and author unless you switch it off.
 - To ship Gutenberg only, drop the collection rows in `tools/build_data.py` (`eligible()`); those minutes then need another source.
 
@@ -70,7 +72,7 @@ The code is MIT (`LICENSE`). The passages are not: each keeps the terms of where
 | Task | Command |
 |---|---|
 | Rebuild the data | `python3 tools/build_data.py` (stdlib only); `--import <tiny-paper>/plugins/litclock/data/passages.json` refreshes `data/passages.jsonl` |
-| Data tests | `python3 -m unittest discover -s tests`: picks equal tiny-paper's (`tests/fixtures/tinypaper_sample.json`, 125 minutes, from `node tools/tinypaper_reference.mjs <tiny-paper>/plugins/litclock`), every minute resolves, no nsfw row, `docs/m` is current |
+| Data tests | `python3 -m unittest discover -s tests`: picks equal tiny-paper's (`tests/fixtures/tinypaper_sample.json`, 144 minutes, from `node tools/tinypaper_reference.mjs <tiny-paper>/plugins/litclock`), every minute resolves, no nsfw row, `docs/m` is current |
 | Render checks | `python3 tests/render.py [--screens]`: 7 passages x 4 layouts x TRMNL OG 1/2-bit and X 4-bit (landscape, portrait), half and quadrant views in a real mashup; fails on overflow, a context under 10 px or a cut author. Needs trmnlp, Chrome and ImageMagick |
 | Preview | `cd plugin && trmnlp serve` (polls the live URL; trmnlp fills the polling URL from custom fields only, so there it is the UTC minute's file) |
 | Lint | `cd plugin && trmnlp lint` |
