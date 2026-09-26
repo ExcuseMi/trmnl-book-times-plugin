@@ -1,5 +1,5 @@
 {% comment %}
-Book Times: a literature clock. The polling URL fetches docs/m/HHMM.json for the user's local minute (GitHub Pages
+Minute by Minute: a literature clock. The polling URL fetches docs/m/HHMM.json for the user's local minute (GitHub Pages
 of this repository); this template sets it as tiny-paper's Literature Clock poster: Montserrat in capitals, the time
 words Black and the largest, every context line Bold and exactly as wide as the poster, a time block with a stack of
 context lines beside it, the context in two grays alternating by sentence (black on 1-bit, Light on the Bold
@@ -49,15 +49,15 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
 </div>
 {%- if has_text and show_attr %}
 <div class="title_bar">
-  <img class="image" src="data:image/svg+xml;base64,{{ icon | base64_encode }}" alt="">
+  <img class="image image--adaptive" src="data:image/svg+xml;base64,{{ icon | base64_encode }}" alt="">
   <span class="title">{{ title | escape }}</span>
-  <span class="instance">{{ author | escape }}{% if show_time %} · {{ digits }}{% endif %}</span>
+  <span class="instance no-shrink">{{ author | escape }}{% if show_time %} · {{ digits }}{% endif %}</span>
 </div>
 {%- elsif show_time %}
 <div class="title_bar">
-  <img class="image" src="data:image/svg+xml;base64,{{ icon | base64_encode }}" alt="">
-  <span class="title">{{ trmnl.plugin_settings.instance_name | default: 'Book Times' | escape }}</span>
-  <span class="instance">{{ digits }}</span>
+  <img class="image image--adaptive" src="data:image/svg+xml;base64,{{ icon | base64_encode }}" alt="">
+  <span class="title">{{ trmnl.plugin_settings.instance_name | default: 'Minute by Minute' | escape }}</span>
+  <span class="instance no-shrink">{{ digits }}</span>
 </div>
 {%- endif %}
 <script>
@@ -73,6 +73,17 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
   var CAP = 700; // replaced by the measured cap height (font units)
   // context tones by sentence: no dithering on any depth (1-bit black, 2-bit #555 / #AAA, 4-bit gray-35 / gray-55)
   var TONE_CLASS = ['text--black 2bit:text--gray-30 4bit:text--gray-35', 'text--black 2bit:text--gray-55 4bit:text--gray-55'];
+  // the lighter tone as outlined letters (stroke only) where the outline is thick enough to read
+  var OUTLINE_MIN_PX = 22, OUTLINE_PX = 1.6;
+  // punctuation around a time word is not part of the highlight: drawn in Bold at MARK of the line's size, in the
+  // first context tone, opening marks hung from the cap height, closing marks on the baseline
+  var MARK = 0.36;
+  // lines are drawn at DRAW px and scaled: hinting rounds at DRAW px, so it must be large (100 px: 1.5 px off at 274 px)
+  var DRAW = 1000;
+  function splitMarks(t) {
+    var m = /^([^A-Z0-9]*)(.*?[A-Z0-9])([^A-Z0-9]*)$/.exec(t);
+    return m ? { pre: m[1], core: m[2], post: m[3] } : { pre: '', core: t, post: '' };
+  }
 
   // ---------------------------------------------------------------- units (text.ts: word and attached marks)
   var ABBREV = { MR: 1, MRS: 1, DR: 1, ST: 1, MESSRS: 1, MME: 1, MLLE: 1, MM: 1, JR: 1, SR: 1, REV: 1, COL: 1, CAPT: 1, GEN: 1, LT: 1, SGT: 1, PROF: 1, HON: 1, VOL: 1 };
@@ -114,7 +125,17 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
     for (var a = 0; a < ws.length; a++) {
       var w = ws[a], p = [0], l = [], r = [], d = [], o = [];
       for (var i = 0; i < units.length; i++) {
-        var mt = measure(units[i].t, w);
+        var mt = measure(units[i].t, w), sp = splitMarks(units[i].t);
+        if (w === BLACK && units[i].emph && (sp.pre || sp.post)) {
+          // Black word, small Bold marks (splitMarks, MARK)
+          var mc = measure(sp.core, BLACK), mp = measure(sp.pre, BOLD), mq = measure(sp.post, BOLD);
+          p.push(p[p.length - 1] + mc.width + MARK * (mp.width + mq.width));
+          l.push(sp.pre ? -MARK * mp.actualBoundingBoxLeft : -mc.actualBoundingBoxLeft);
+          r.push(sp.post ? MARK * (mq.width - mq.actualBoundingBoxRight) : mc.width - mc.actualBoundingBoxRight);
+          d.push(Math.max(0, mc.actualBoundingBoxDescent, MARK * mp.actualBoundingBoxDescent, MARK * mq.actualBoundingBoxDescent));
+          o.push(Math.max(0, mc.actualBoundingBoxAscent - CAP));
+          continue;
+        }
         p.push(p[p.length - 1] + mt.width);
         l.push(-mt.actualBoundingBoxLeft);
         r.push(mt.width - mt.actualBoundingBoxRight);
@@ -335,6 +356,8 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
   function layoutPoster(units, W, H) {
     var run = new Run(units), emph = units.map(function (u) { return u.emph; }), memo = {};
     var best = null, lowest = null;
+    // tiny-paper's weight is for landscape posters; a taller view leaves most of its height empty with it
+    var fillW = TUNE.fill * Math.max(1, sq((H / W) / 0.6));
     function tryOne(sc, tr) {
       var c = { run: run, emph: emph, W: W, x0: 0, sc: sc, st: sc * tr, ph: H, memo: memo };
       var r = rows(c);
@@ -345,7 +368,7 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
         if (l.time) tMin = Math.min(tMin, l.size); else cMax = Math.max(cMax, l.size);
       }
       var short = tMin < Infinity && cMax > 0 && tMin < TUNE.contrast * cMax ? 8 + 40 * ((TUNE.contrast * cMax) / tMin - 1) : 0;
-      var cand = { cost: r.cost + short + TUNE.fill * (slack / H), sc: sc, tr: tr, pl: pl };
+      var cand = { cost: r.cost + short + fillW * (slack / H), sc: sc, tr: tr, pl: pl };
       if (slack >= 0 && (!best || cand.cost < best.cost)) best = cand;
       if (!lowest || pl.height < lowest.pl.height) lowest = cand;
       return pl.height;
@@ -394,15 +417,23 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
       var t = document.createElementNS(NS, 'text');
       // ink from the layout's left edge to its right edge in the drawn weight (Light on 1-bit sits on the Bold
       // widths): the pen starts one side bearing before the ink, textLength spreads the glyphs to the ink width
-      var k0 = l.size / 1000, first = measure(units[l.start].t, dw), last = measure(units[l.start + l.n - 1].t, dw);
+      // the first and last word in the weight they are drawn in (an outlined sentence is Bold, also on 1-bit)
+      var toneEnd = l.tone;
+      for (var v = l.start + 1; v < l.start + l.n; v++) if (units[v - 1].end) toneEnd ^= 1;
+      var wFirst = outlined(l, l.tone) ? BOLD : dw, wLast = outlined(l, toneEnd) ? BOLD : dw;
+      var k0 = l.size / 1000, first = measure(units[l.start].t, wFirst), last = measure(units[l.start + l.n - 1].t, wLast);
       var lsb = -first.actualBoundingBoxLeft, rsb = last.width - last.actualBoundingBoxRight;
+      if (l.time) {
+        lsb = res.run.lsb(l.start, BLACK);
+        rsb = res.run.rsb(l.start + l.n, BLACK);
+      }
       var inkL = l.x + res.run.lsb(l.start, mw) * k0, inkW = res.run.ink(l.start, l.start + l.n, mw) * k0;
-      // drawn at 100 px and scaled, so the glyphs are the measured outlines at any size (no size-dependent hinting)
-      var f = l.size / 100;
+      // drawn at DRAW px and scaled, so the glyphs are the measured outlines at any size
+      var f = l.size / DRAW;
       t.setAttribute('transform', 'translate(' + (inkL - lsb * k0) + ' ' + l.y + ') scale(' + f + ')');
       t.setAttribute('font-family', FAMILY);
       t.setAttribute('font-weight', dw);
-      t.setAttribute('font-size', 100);
+      t.setAttribute('font-size', DRAW);
       t.setAttribute('data-size', l.size);
       t.setAttribute('fill', 'currentColor');
       t.setAttribute('class', 'bt-line ' + (l.time ? 'bt-time text--black' : 'bt-ctx'));
@@ -413,6 +444,13 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
       t.setAttributeNS('http://www.w3.org/XML/1998/namespace', 'xml:space', 'preserve');
       t.setAttribute('textLength', (inkW + (lsb + rsb) * k0) / f);
       t.setAttribute('lengthAdjust', 'spacing');
+      if (l.time) {
+        t.removeAttribute('textLength');
+        t.removeAttribute('lengthAdjust');
+        timeLine(t, units, l);
+        svg.appendChild(t);
+        continue;
+      }
       var tone = l.tone, text = '';
       for (var u = l.start; u < l.start + l.n; u++) {
         if (u > l.start && units[u - 1].end && !l.time) {
@@ -422,20 +460,80 @@ non-commercial, under their terms. Montserrat: SIL Open Font License 1.1, from G
         }
         text += (u > l.start ? ' ' : '') + units[u].t;
       }
-      t.appendChild(span(text, l.time, tone));
+      t.appendChild(span(text, l.time, tone, l.size));
       svg.appendChild(t);
     }
   }
-  function span(text, time, tone) {
+  // a time line: the words in Black at full size, their marks in Bold at MARK, opening ones raised to the cap height
+  // Each piece at its measured pen position (x in the DRAW px drawing space), so the line has the layout's width.
+  function timeLine(t, units, l) {
+    var pen = 0; // in font units at 1000 px
+    function put(text, cls, size, weight, width, dy) {
+      var p = piece(text, cls, size, weight);
+      p.setAttribute('x', (pen * DRAW) / 1000);
+      p.setAttribute('y', dy);
+      // the measured advance: SVG text runs slightly off the canvas measure
+      p.setAttribute('textLength', (width * DRAW) / 1000);
+      p.setAttribute('lengthAdjust', 'spacingAndGlyphs');
+      t.appendChild(p);
+      pen += width;
+    }
+    for (var u = l.start; u < l.start + l.n; u++) {
+      var sp = splitMarks(units[u].t);
+      if (u > l.start) put(' ', 'text--black', DRAW, BLACK, measure(' ', BLACK).width, 0);
+      if (sp.pre) {
+        // its ink top at the word's cap height (a quote mark rises above a capital)
+        var mp = measure(sp.pre, BOLD);
+        put(sp.pre, TONE_CLASS[0], DRAW * MARK, BOLD, MARK * mp.width, ((-CAP + MARK * mp.actualBoundingBoxAscent) * DRAW) / 1000);
+      }
+      put(sp.core, 'text--black', DRAW, BLACK, measure(sp.core, BLACK).width, 0);
+      if (sp.post) put(sp.post, TONE_CLASS[0], DRAW * MARK, BOLD, MARK * measure(sp.post, BOLD).width, 0);
+    }
+  }
+  function piece(text, cls, size, weight) {
     var s = document.createElementNS(NS, 'tspan');
-    s.setAttribute('class', time ? 'text--black' : TONE_CLASS[tone]);
+    s.setAttribute('class', cls);
     s.setAttribute('fill', 'currentColor');
+    s.setAttribute('font-size', size);
+    s.setAttribute('font-weight', weight);
     s.textContent = text;
     return s;
   }
+  function outlined(l, tone) { return !l.time && tone === 1 && l.size >= OUTLINE_MIN_PX; }
+  function span(text, time, tone, size) {
+    var s = document.createElementNS(NS, 'tspan');
+    s.textContent = text;
+    if (!time && tone === 1 && size >= OUTLINE_MIN_PX) {
+      // outlined: the stroke painted first and the letters filled white over it, so the font's overlapping contours
+      // (Montserrat is a variable font) leave no lines inside; the fill covers the stroke's inner half, hence 2x.
+      // Plain black and white: TRMNL's dark mode inverts the screen (images aside). Width in the DRAW px space.
+      s.setAttribute('fill', '#fff');
+      s.setAttribute('stroke', '#000');
+      s.setAttribute('paint-order', 'stroke');
+      s.setAttribute('stroke-width', (2 * OUTLINE_PX * DRAW) / size);
+      s.setAttribute('stroke-linejoin', 'round');
+      s.setAttribute('font-weight', BOLD); // an outlined Light letter fills in; Bold is the layout's width anyway
+      return s;
+    }
+    s.setAttribute('class', time ? 'text--black' : TONE_CLASS[tone]);
+    s.setAttribute('fill', 'currentColor');
+    return s;
+  }
+  // The title bar: a long title loses words from the end (an ellipsis marks the cut) until the author and the time fit.
+  function fitBar() {
+    var bar = view.querySelector('.title_bar'), ti = bar && bar.querySelector('.title'), ins = bar && bar.querySelector('.instance');
+    if (!ti || !ins) return;
+    var full = ti.textContent.trim(), words = full.split(/\s+/);
+    function fits() { return ins.getBoundingClientRect().right <= bar.getBoundingClientRect().right - 1; }
+    while (!fits() && words.length > 1) {
+      words.pop();
+      ti.textContent = words.join(' ').replace(/[,;:]$/, '') + '…';
+    }
+  }
   function run() {
     var loads = [BLACK, BOLD, LIGHT].map(function (w) { return document.fonts.load(w + ' 100px ' + FAMILY, 'AZ'); });
-    Promise.all(loads).then(function () { return document.fonts.ready; }).then(draw, draw);
+    function both() { draw(); fitBar(); }
+    Promise.all(loads).then(function () { return document.fonts.ready; }).then(both, both);
   }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', run);
   else run();
